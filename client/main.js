@@ -1,7 +1,11 @@
 // Real-Time Voice Assistant Client - Phase 3
 // Audio Streaming + Deepgram STT + Streaming LLM Assistant Integration
 
-const WS_URL = 'ws://localhost:8080';
+const WS_URL = import.meta.env.VITE_WS_URL || (
+  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'ws://localhost:8080'
+    : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`
+);
 
 // DOM Elements: Connection & Pipeline
 const connectionPill = document.getElementById('connection-pill');
