@@ -1,5 +1,6 @@
 # Whisperly — Real-Time Streaming AI Voice Assistant 🎙️⚡
 
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Render-46E3B7?style=for-the-badge&logo=render&logoColor=white)](https://whisperly-ai-voice-assistance.onrender.com/)
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![Vite](https://img.shields.io/badge/Vite-6.0-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
 [![Deepgram Nova-2](https://img.shields.io/badge/STT-Deepgram_Nova--2-13EF93?logo=deepgram&logoColor=black)](https://deepgram.com/)
@@ -7,6 +8,8 @@
 [![ElevenLabs](https://img.shields.io/badge/TTS-ElevenLabs_Turbo-FF6B00?logo=elevenlabs&logoColor=white)](https://elevenlabs.io/)
 [![SQLite](https://img.shields.io/badge/Database-SQLite_Native-003B57?logo=sqlite&logoColor=white)](https://nodejs.org/api/sqlite.html)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+> 🌐 **Live Production App**: **[https://whisperly-ai-voice-assistance.onrender.com/](https://whisperly-ai-voice-assistance.onrender.com/)**
 
 **Whisperly** is a state-of-the-art, low-latency streaming AI voice assistant. It continuously streams raw linear PCM microphone audio from an in-browser `AudioWorklet`, transcribes speech in real time with **Deepgram Nova-2**, streams conversational responses and autonomously executes tools via **Gemini 2.5 Flash**, synthesizes streaming voice output using **ElevenLabs Turbo v2.5**, and supports **instant sub-50ms barge-in interruptions**.
 
@@ -241,8 +244,12 @@ See [`DEMO.md`](file:///c:/Rohan/Projects/voice%20Assistance/DEMO.md) for a comp
 
 ## 🌐 Cloud Deployment
 
+### Live Deployment
+The project is deployed and accessible at:
+👉 **[https://whisperly-ai-voice-assistance.onrender.com/](https://whisperly-ai-voice-assistance.onrender.com/)**
+
 ### Deploy to Render
-The repository includes a [`render.yaml`](file:///c:/Rohan/Projects/voice%20Assistance/render.yaml) blueprint:
+The repository includes an all-in-one [`render.yaml`](file:///c:/Rohan/Projects/voice%20Assistance/render.yaml) blueprint that builds and serves both the frontend UI and WebSocket backend from a single service:
 1. Fork or push this repository to GitHub.
 2. Log in to [Render](https://render.com/) and create a **New Blueprint Instance**.
 3. Link your repository — Render will automatically read `render.yaml` and configure the Node.js web service.
