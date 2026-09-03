@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Real-Time Voice Assistant</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div class="app-background"></div>
+  <div class="radial-glow top-glow"></div>
+  <div class="radial-glow bottom-glow"></div>
+
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-icon">
+          <div class="pulse-ring"></div>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" y1="19" x2="12" y2="22"></line>
+          </svg>
+        </div>
+        <div>
+          <h1>Voice Assistant <span class="badge-phase">Phase 2</span></h1>
+          <p class="subtitle">Real-Time Streaming Voice Intelligence</p>
+        </div>
+      </div>
+
+      <!-- Connection Status Pill -->
+      <div id="connection-pill" class="status-pill status-disconnected">
+        <span class="status-dot"></span>
+        <span id="connection-text" class="status-text">Disconnected</span>
+      </div>
+    </header>
+
+    <!-- Main Grid -->
+    <main class="main-grid">
+      <!-- Microphone Capture & Streaming Card -->
+      <section class="card glass-card mic-stream-card">
+        <div class="card-header">
+          <div class="header-with-badge">
+            <h2>Microphone Audio Stream</h2>
+            <span id="mic-badge" class="badge-live badge-inactive">MUTED</span>
+          </div>
+          <span class="card-tag">16kHz PCM Worklet</span>
+        </div>
+
+        <p class="section-desc">
+          Captures raw mic audio via AudioWorklet, converts to 16-bit linear PCM (50ms chunks), and streams binary frames directly over the WebSocket.
+        </p>
+
+        <!-- Mic Control & Visualizer Box -->
+        <div class="mic-controls-container">
+          <div class="mic-toggle-wrapper">
+            <button id="btn-mic-toggle" class="btn-mic" aria-label="Toggle Microphone">
+              <div class="mic-ring ring-1"></div>
+              <div class="mic-ring ring-2"></div>
+              <div class="mic-icon-inner">
+                <svg id="mic-icon-svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                  <line x1="12" y1="19" x2="12" y2="22"></line>
+                </svg>
+              </div>
+            </button>
+            <span id="mic-toggle-caption" class="mic-caption">Click to Start Mic</span>
+            <button id="btn-test-tone" class="chip" type="button" style="margin-top: 4px;">⚡ Simulate Audio Stream</button>
+          </div>
+
+          <!-- Live VU Meter & Oscilloscope -->
+          <div class="visualizer-wrapper">
+            <div class="meter-header">
+              <span class="meter-title">Live Mic Energy (RMS)</span>
+              <span id="vu-level-value" class="meter-val mono">0%</span>
+            </div>
+            <!-- Dynamic VU Bar -->
+            <div class="vu-track">
+              <div id="vu-meter-bar" class="vu-bar" style="width: 0%;"></div>
+              <div id="vu-meter-peak" class="vu-peak" style="left: 0%;"></div>
+            </div>
+
+            <!-- Waveform Canvas -->
+            <div class="canvas-box">
+              <canvas id="audio-visualizer" width="380" height="60"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Audio Streaming Metrics -->
+        <div class="stream-stats-grid">
+          <div class="stat-box">
+            <span class="stat-label">Chunks Sent</span>
+            <span id="stat-chunks" class="stat-value mono">0</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Streamed Size</span>
+            <span id="stat-bytes" class="stat-value mono">0 KB</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Audio Throughput</span>
+            <span id="stat-rate" class="stat-value mono">0.0 KB/s</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Stream Duration</span>
+            <span id="stat-duration" class="stat-value mono">00:00</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Live Speech Transcript Card (Phase 2 Focus) -->
+      <section class="card glass-card transcript-card">
+        <div class="card-header">
+          <div class="header-with-badge">
+            <h2>Dialogue & Speech Stream</h2>
+            <span id="stt-status-badge" class="badge-live badge-inactive">READY</span>
+          </div>
+          <div class="stt-meta-tags">
+            <span class="card-tag">Deepgram Nova-2</span>
+            <span id="llm-model-badge" class="card-tag">Gemini 2.5 Flash</span>
+            <span id="stt-latency-badge" class="card-tag tag-latency">STT: -- ms</span>
+            <span id="llm-ttft-badge" class="card-tag tag-ttft">TTFT: -- ms</span>
+          </div>
+        </div>
+
+        <p class="section-desc">
+          Full speech-to-text and streaming LLM conversation. Speak or simulate a turn; watch real-time transcription endpointing and streaming assistant replies.
+        </p>
+
+        <!-- Live Interim Box (Active Speech Indicator) -->
+        <div id="live-interim-box" class="live-interim-box hidden">
+          <div class="interim-header">
+            <span class="pulse-dot-green"></span>
+            <span class="interim-title">Transcribing Live Voice...</span>
+          </div>
+          <p id="interim-text" class="interim-text">Listening...</p>
+        </div>
+
+        <!-- Finalized Transcript & LLM Feed Container -->
+        <div id="transcript-feed" class="transcript-feed">
+          <div class="transcript-empty-placeholder" id="transcript-empty">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+            <p>Speak into your microphone or send a prompt. Spoken turns and streaming assistant replies will appear here.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Session & Connection Info Panel -->
+      <section class="card glass-card session-card">
+        <div class="card-header">
+          <h2>WebSocket Pipeline</h2>
+          <span class="card-tag">Core Transport</span>
+        </div>
+
+        <div class="info-rows">
+          <div class="info-row">
+            <span class="info-label">Endpoint</span>
+            <span id="endpoint-display" class="info-value mono">ws://localhost:8080</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Session ID</span>
+            <span id="session-display" class="info-value mono">Not Connected</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Latency (Roundtrip)</span>
+            <span id="latency-display" class="info-value mono">-- ms</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">State</span>
+            <span id="state-display" class="info-badge state-idle">IDLE</span>
+          </div>
+        </div>
+
+        <div class="card-actions">
+          <button id="btn-reconnect" class="btn btn-secondary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path>
+              <path d="M21 3v5h-5"></path>
+              <path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path>
+              <path d="M3 21v-5h5"></path>
+            </svg>
+            Reconnect
+          </button>
+          <button id="btn-ping" class="btn btn-primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+            </svg>
+            Send Ping
+          </button>
+        </div>
+      </section>
+
+      <!-- Interactive Test Message Card -->
+      <section class="card glass-card message-card">
+        <div class="card-header">
+          <h2>Echo Test Console</h2>
+          <span class="card-tag">Sanity Check</span>
+        </div>
+
+        <form id="echo-form" class="echo-form">
+          <div class="input-wrapper">
+            <input
+              type="text"
+              id="message-input"
+              class="text-input"
+              placeholder="Type a test message (e.g. Hello WebSocket!)..."
+              autocomplete="off"
+            />
+            <button type="submit" id="btn-send" class="btn btn-accent">
+              <span>Send</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+              </svg>
+            </button>
+          </div>
+        </form>
+
+        <div class="quick-chips">
+          <span class="chip-label">Quick test:</span>
+          <button type="button" class="chip" data-msg='{"type": "greeting", "text": "Hello Assistant Server"}'>Greeting JSON</button>
+          <button type="button" class="chip" data-msg='{"type": "status_check", "client": "browser"}'>Status Check</button>
+          <button type="button" class="chip" data-msg="Simple string test">Plain text</button>
+        </div>
+      </section>
+
+      <!-- Activity & Log Stream -->
+      <section class="card glass-card logs-card">
+        <div class="card-header">
+          <div class="header-with-badge">
+            <h2>Live WebSocket Event Log</h2>
+            <span id="log-count" class="badge-count">0</span>
+          </div>
+          <button id="btn-clear-logs" class="btn-text">Clear</button>
+        </div>
+
+        <div id="logs-container" class="logs-container">
+          <!-- Live events will be rendered here -->
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <div class="footer-pipeline">
+        <span class="step done">0: Scaffolding ✓</span>
+        <span class="step-divider">→</span>
+        <span class="step done">1: Mic Stream ✓</span>
+        <span class="step-divider">→</span>
+        <span class="step done">2: STT ✓</span>
+        <span class="step-divider">→</span>
+        <span class="step active">3: LLM Stream (Active)</span>
+        <span class="step-divider">→</span>
+        <span class="step">4: Tools</span>
+        <span class="step-divider">→</span>
+        <span class="step">5: TTS</span>
+        <span class="step-divider">→</span>
+        <span class="step">6: Barge-in</span>
+      </div>
+    </footer>
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

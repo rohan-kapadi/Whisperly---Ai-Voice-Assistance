@@ -1,0 +1,13 @@
+{
+  "name": "realtime-voice-assistant",
+  "version": "0.1.0",
+  "description": "Low-latency streaming voice assistant with tool calling and barge-in",
+  "private": true,
+  "scripts": {
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "install:all": "npm --prefix server install && npm --prefix client install"
+  },
+  "keywords": ["voice-assistant", "real-time", "llm", "stt", "tts", "barge-in"],
+  "license": "MIT"
+}
