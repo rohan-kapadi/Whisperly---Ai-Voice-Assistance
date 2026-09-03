@@ -14,7 +14,7 @@ export class DeepgramLiveStream extends EventEmitter {
     this.model = options.model || 'nova-2';
     this.language = options.language || 'en';
     this.sampleRate = options.sampleRate || 16000;
-    this.endpointing = options.endpointing !== undefined ? options.endpointing : 300;
+    this.endpointing = options.endpointing !== undefined ? options.endpointing : 200;
 
     this.ws = null;
     this.isConnected = false;

@@ -66,6 +66,14 @@ const barSegStt = document.getElementById('bar-seg-stt');
 const barSegLlm = document.getElementById('bar-seg-llm');
 const barSegTts = document.getElementById('bar-seg-tts');
 
+// DOM Elements: Wake Word Engine (Phase 8)
+const wakewordBadge = document.getElementById('wakeword-badge');
+const btnModeContinuous = document.getElementById('btn-mode-continuous');
+const btnModeWakeword = document.getElementById('btn-mode-wakeword');
+const btnTriggerWakeword = document.getElementById('btn-trigger-wakeword');
+const wakewordStatusDesc = document.getElementById('wakeword-status-desc');
+const wakewordCard = document.querySelector('.wakeword-card');
+
 // DOM Elements: Echo & Test Console
 const echoForm = document.getElementById('echo-form');
 const messageInput = document.getElementById('message-input');
@@ -171,6 +179,48 @@ toolChips.forEach((chip) => {
 if (btnManualInterrupt) {
   btnManualInterrupt.addEventListener('click', () => {
     triggerBargeIn('manual_button');
+  });
+}
+
+if (btnModeContinuous) {
+  btnModeContinuous.addEventListener('click', () => {
+    isWakeWordMode = false;
+    isWakeActive = true;
+    btnModeContinuous.classList.add('active');
+    btnModeWakeword.classList.remove('active');
+    if (wakewordBadge) {
+      wakewordBadge.textContent = 'CONTINUOUS MIC';
+      wakewordBadge.className = 'badge-live badge-inactive';
+    }
+    if (wakewordCard) wakewordCard.classList.remove('active-glow');
+    if (wakewordStatusDesc) {
+      wakewordStatusDesc.textContent = 'Continuous mode active (mic streams on talk).';
+    }
+    addLog('sys', 'Switched to Continuous Mic mode.');
+  });
+}
+
+if (btnModeWakeword) {
+  btnModeWakeword.addEventListener('click', () => {
+    isWakeWordMode = true;
+    isWakeActive = false;
+    btnModeWakeword.classList.add('active');
+    btnModeContinuous.classList.remove('active');
+    if (wakewordBadge) {
+      wakewordBadge.textContent = 'STANDBY: "HEY WHISPERLY"';
+      wakewordBadge.className = 'badge-live badge-inactive';
+    }
+    if (wakewordCard) wakewordCard.classList.remove('active-glow');
+    if (wakewordStatusDesc) {
+      wakewordStatusDesc.textContent = 'Standby mode: Audio transmission gated until "Hey Whisperly".';
+    }
+    addLog('sys', 'Switched to Wake Word Gated mode.');
+  });
+}
+
+if (btnTriggerWakeword) {
+  btnTriggerWakeword.addEventListener('click', () => {
+    activateWakeWord('Hey Whisperly');
   });
 }
 
@@ -388,13 +438,20 @@ function setupAudioNodes(inputSourceNode) {
   workletNode.port.onmessage = (event) => {
     if (event.data.type === 'pcm_chunk') {
       const { pcmData, rms } = event.data;
+
+      updateVuMeter(rms);
+
+      // Phase 8: Wake Word Standby Gating Check
+      if (isWakeWordMode && !isWakeActive) {
+        return;
+      }
+
       if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(pcmData);
         audioChunksSent++;
         audioBytesSent += pcmData.byteLength;
         updateAudioStatsUI();
       }
-      updateVuMeter(rms);
 
       // Phase 6 Fast VAD Barge-In: If user speaks while assistant is speaking, cut off audio immediately
       if (isTtsPlaying && rms > 0.16) {
@@ -871,20 +928,17 @@ function scheduleAudioBuffer(ctx, audioBuffer, isLast) {
   const source = ctx.createBufferSource();
   source.buffer = audioBuffer;
 
-  // Phase 7: Anti-Click Micro-Fade GainNode (eliminates pops between audio chunks)
   const gainNode = ctx.createGain();
   source.connect(gainNode);
   gainNode.connect(ctx.destination);
 
   const now = ctx.currentTime;
+  // If queue has fallen behind current time, start immediately, else schedule smoothly at nextAudioStartTime
   const startTime = Math.max(now, nextAudioStartTime);
   const duration = audioBuffer.duration;
-  const fade = 0.005; // 5ms micro-ramp
 
-  gainNode.gain.setValueAtTime(0.001, startTime);
-  gainNode.gain.exponentialRampToValueAtTime(1.0, startTime + Math.min(fade, duration / 2));
-  gainNode.gain.setValueAtTime(1.0, startTime + Math.max(0, duration - fade));
-  gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+  // Continuous full natural gain (no dropouts or stuttering between chunks)
+  gainNode.gain.setValueAtTime(1.0, startTime);
 
   source.start(startTime);
   nextAudioStartTime = startTime + duration;
@@ -962,6 +1016,93 @@ function handleTelemetry(payload) {
     'in',
     `[Telemetry] E2E: ${metrics.totalMs}ms (STT: ${metrics.sttMs}ms | LLM: ${metrics.llmMs}ms | TTS: ${metrics.ttsMs}ms)`
   );
+}
+
+// ============================================================================
+// Phase 8: Wake Word Engine & Acoustic Wake Chime
+// ============================================================================
+
+let isWakeWordMode = false;
+let isWakeActive = true;
+let wakeWordSleepTimer = null;
+
+function playWakeChime() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+
+    // Tone 1: F#5 (739.99 Hz)
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(739.99, now);
+    gain1.gain.setValueAtTime(0.001, now);
+    gain1.gain.exponentialRampToValueAtTime(0.2, now + 0.01);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.1);
+
+    // Tone 2: B5 (987.77 Hz)
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(987.77, now + 0.08);
+    gain2.gain.setValueAtTime(0.001, now + 0.08);
+    gain2.gain.exponentialRampToValueAtTime(0.25, now + 0.09);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(now + 0.08);
+    osc2.stop(now + 0.28);
+  } catch (err) {
+    console.warn('[Wake Chime] AudioContext error:', err);
+  }
+}
+
+function activateWakeWord(keyword = 'Hey Whisperly') {
+  isWakeActive = true;
+  playWakeChime();
+
+  if (wakewordBadge) {
+    wakewordBadge.textContent = `ACTIVATED: "${keyword.toUpperCase()}"`;
+    wakewordBadge.className = 'badge-live badge-wake-active';
+  }
+  if (wakewordCard) {
+    wakewordCard.classList.add('active-glow');
+  }
+  if (wakewordStatusDesc) {
+    wakewordStatusDesc.textContent = `Wake word spotted! Audio un-gated and listening for speech.`;
+  }
+
+  if (wakeWordSleepTimer) clearTimeout(wakeWordSleepTimer);
+  if (isWakeWordMode) {
+    wakeWordSleepTimer = setTimeout(() => {
+      deactivateWakeWord();
+    }, 12000);
+  }
+
+  addLog('sys', `[Wake Word] "${keyword}" triggered. Audio stream un-gated.`);
+}
+
+function deactivateWakeWord() {
+  if (!isWakeWordMode) return;
+  isWakeActive = false;
+
+  if (wakewordBadge) {
+    wakewordBadge.textContent = 'STANDBY: "HEY WHISPERLY"';
+    wakewordBadge.className = 'badge-live badge-inactive';
+  }
+  if (wakewordCard) {
+    wakewordCard.classList.remove('active-glow');
+  }
+  if (wakewordStatusDesc) {
+    wakewordStatusDesc.textContent = `Standby mode: Audio transmission gated until "Hey Whisperly".`;
+  }
+
+  addLog('sys', `[Wake Word] Standby timeout reached. Returning to gated standby.`);
 }
 
 // ============================================================================

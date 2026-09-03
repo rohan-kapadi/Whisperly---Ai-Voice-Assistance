@@ -1347,6 +1347,109 @@ body {
   background: linear-gradient(90deg, #059669, #10b981);
 }
 
+/* ==========================================================================
+   Wake Word Engine & Audio Gating (Phase 8)
+   ========================================================================== */
+
+.wakeword-card {
+  grid-column: 1 / -1;
+  background: linear-gradient(135deg, rgba(28, 25, 23, 0.95) 0%, rgba(20, 18, 16, 0.98) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  box-shadow: 0 12px 35px -10px rgba(0, 0, 0, 0.6), 0 0 25px rgba(245, 158, 11, 0.08);
+  transition: all var(--transition-normal);
+}
+
+.wakeword-card.active-glow {
+  border-color: #f59e0b;
+  box-shadow: 0 0 35px rgba(245, 158, 11, 0.3);
+}
+
+.wakeword-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 0.85rem 1.15rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.mode-switch-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.mode-label {
+  font-size: 0.78rem;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.mode-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  padding: 0.35rem 0.85rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.mode-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.mode-btn.active {
+  background: rgba(245, 158, 11, 0.18);
+  border-color: #f59e0b;
+  color: #fbbf24;
+  font-weight: 600;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.25);
+}
+
+.wakeword-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.btn-warning {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+  color: #fff;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.btn-warning:hover {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  box-shadow: 0 0 18px rgba(245, 158, 11, 0.4);
+  transform: translateY(-1px);
+}
+
+.wakeword-status-desc {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.badge-wake-active {
+  background: rgba(245, 158, 11, 0.2) !important;
+  color: #fbbf24 !important;
+  border-color: #f59e0b !important;
+  animation: pulse-wake 1.2s infinite alternate;
+}
+
+@keyframes pulse-wake {
+  0% { box-shadow: 0 0 4px rgba(245, 158, 11, 0.3); }
+  100% { box-shadow: 0 0 16px rgba(245, 158, 11, 0.7); }
+}
+
+
 
 
 

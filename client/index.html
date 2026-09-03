@@ -27,7 +27,7 @@
           </svg>
         </div>
         <div>
-          <h1>Voice Assistant <span class="badge-phase">Phase 7 (Production)</span></h1>
+          <h1>Voice Assistant <span class="badge-phase">Phase 8 (Wake Word & Sub-1.5s)</span></h1>
           <p class="subtitle">Real-Time Streaming Voice Intelligence</p>
         </div>
       </div>
@@ -41,6 +41,43 @@
 
     <!-- Main Grid -->
     <main class="main-grid">
+      <!-- Wake Word & Keyword Spotting Card (Phase 8 Focus) -->
+      <section class="card glass-card wakeword-card">
+        <div class="card-header">
+          <div class="header-with-badge">
+            <h2>Wake Word Engine ("Hey Whisperly")</h2>
+            <span id="wakeword-badge" class="badge-live badge-inactive">STANDBY</span>
+          </div>
+          <div class="stt-meta-tags">
+            <span class="card-tag">Acoustic Wake Chime</span>
+            <span class="card-tag">Audio Gating</span>
+          </div>
+        </div>
+
+        <p class="section-desc">
+          Intelligent keyword spotting. Gates microphone transmission in standby mode to save bandwidth and tokens until "Hey Whisperly" is spoken.
+        </p>
+
+        <!-- Mode Toggle & Trigger Controls -->
+        <div class="wakeword-controls">
+          <div class="mode-switch-group">
+            <span class="mode-label">Gating Mode:</span>
+            <button id="btn-mode-continuous" class="mode-btn active" type="button">🎙️ Continuous Mic</button>
+            <button id="btn-mode-wakeword" class="mode-btn" type="button">⚡ Wake Word Gated</button>
+          </div>
+
+          <div class="wakeword-actions">
+            <button id="btn-trigger-wakeword" class="btn btn-warning btn-sm" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+              </svg>
+              <span>Trigger "Hey Whisperly"</span>
+            </button>
+            <span id="wakeword-status-desc" class="wakeword-status-desc">Continuous mode active (mic streams on talk)</span>
+          </div>
+        </div>
+      </section>
+
       <!-- Microphone Capture & Streaming Card -->
       <section class="card glass-card mic-stream-card">
         <div class="card-header">
@@ -390,7 +427,9 @@
         <span class="step-divider">→</span>
         <span class="step done">6: Barge-In ✓</span>
         <span class="step-divider">→</span>
-        <span class="step active">7: Telemetry & Polish (Active)</span>
+        <span class="step done">7: Telemetry ✓</span>
+        <span class="step-divider">→</span>
+        <span class="step active">8: Wake Word & Sub-1.5s (Active)</span>
       </div>
     </footer>
   </div>

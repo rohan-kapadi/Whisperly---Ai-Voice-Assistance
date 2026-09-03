@@ -56,101 +56,71 @@ export class LLMService {
 
     onStart();
 
-    // 1. Gemini Implementation with Tool Calling
+    // 1. Gemini Implementation with Tool Calling (Resilient Multi-Model Pool)
+    const GEMINI_MODELS = ['gemini-2.5-flash-lite', 'gemini-flash-latest', 'gemini-3.6-flash', 'gemini-2.5-flash'];
+
     if (this.geminiClient) {
-      try {
-        const contents = [];
-        for (const msg of messages) {
-          contents.push({
-            role: msg.role === 'assistant' ? 'model' : 'user',
-            parts: [{ text: msg.content }]
-          });
-        }
-
-        const toolsConfig = [{
-          functionDeclarations: TOOL_DEFINITIONS.map(t => ({
-            name: t.name,
-            description: t.description,
-            parameters: t.parameters
-          }))
-        }];
-
-        // First, check if the LLM desires to invoke a tool
-        const checkRes = await this.geminiClient.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents,
-          config: {
-            systemInstruction: systemPrompt,
-            tools: toolsConfig,
-            temperature: 0.5
-          }
-        });
-
-        // If tool call is requested, execute tool and feed result back
-        if (checkRes.functionCalls && checkRes.functionCalls.length > 0) {
-          for (const call of checkRes.functionCalls) {
-            console.log(`[LLM Tool Call] ${call.name}:`, JSON.stringify(call.args));
-            onToolCall({ name: call.name, args: call.args, timestamp: Date.now() });
-
-            const toolResult = await executeTool(call.name, call.args);
-            executedTools.push({ name: call.name, args: call.args, result: toolResult });
-            onToolResult({ name: call.name, args: call.args, result: toolResult, timestamp: Date.now() });
-
+      for (const model of GEMINI_MODELS) {
+        try {
+          const contents = [];
+          for (const msg of messages) {
             contents.push({
-              role: 'model',
-              parts: [{ functionCall: call }]
-            });
-            contents.push({
-              role: 'user',
-              parts: [{
-                functionResponse: {
-                  name: call.name,
-                  response: toolResult
-                }
-              }]
+              role: msg.role === 'assistant' ? 'model' : 'user',
+              parts: [{ text: msg.content }]
             });
           }
 
-          // Stream the final natural language summary of the tool result
-          const responseStream = await this.geminiClient.models.generateContentStream({
-            model: 'gemini-2.5-flash',
+          const toolsConfig = [{
+            functionDeclarations: TOOL_DEFINITIONS.map(t => ({
+              name: t.name,
+              description: t.description,
+              parameters: t.parameters
+            }))
+          }];
+
+          // First, check if the LLM desires to invoke a tool
+          const checkRes = await this.geminiClient.models.generateContent({
+            model,
             contents,
             config: {
               systemInstruction: systemPrompt,
-              temperature: 0.6,
-              maxOutputTokens: 250
+              tools: toolsConfig,
+              temperature: 0.5
             }
           });
 
-          for await (const chunk of responseStream) {
-            if (signal && signal.aborted) {
-              console.log('[LLM Stream] Generation aborted by user barge-in.');
-              break;
+          // If tool call is requested, execute tool and feed result back
+          if (checkRes.functionCalls && checkRes.functionCalls.length > 0) {
+            for (const call of checkRes.functionCalls) {
+              console.log(`[LLM Tool Call] ${call.name}:`, JSON.stringify(call.args));
+              onToolCall({ name: call.name, args: call.args, timestamp: Date.now() });
+
+              const toolResult = await executeTool(call.name, call.args);
+              executedTools.push({ name: call.name, args: call.args, result: toolResult });
+              onToolResult({ name: call.name, args: call.args, result: toolResult, timestamp: Date.now() });
+
+              contents.push({
+                role: 'model',
+                parts: [{ functionCall: call }]
+              });
+              contents.push({
+                role: 'user',
+                parts: [{
+                  functionResponse: {
+                    name: call.name,
+                    response: toolResult
+                  }
+                }]
+              });
             }
-            const delta = chunk.text || '';
-            if (delta) {
-              if (ttftMs === null) {
-                ttftMs = Date.now() - startTime;
-              }
-              fullText += delta;
-              onDelta(delta, { ttftMs, elapsedMs: Date.now() - startTime });
-            }
-          }
-        } else {
-          // No tool requested: if initial check already produced complete text, stream or emit it
-          const initialText = checkRes.text || '';
-          if (initialText) {
-            ttftMs = Date.now() - startTime;
-            fullText = initialText;
-            onDelta(initialText, { ttftMs, elapsedMs: ttftMs });
-          } else {
-            // Stream normally
+
+            // Stream the final natural language summary of the tool result
             const responseStream = await this.geminiClient.models.generateContentStream({
-              model: 'gemini-2.5-flash',
+              model,
               contents,
               config: {
                 systemInstruction: systemPrompt,
-                temperature: 0.7,
+                temperature: 0.6,
                 maxOutputTokens: 250
               }
             });
@@ -169,34 +139,64 @@ export class LLMService {
                 onDelta(delta, { ttftMs, elapsedMs: Date.now() - startTime });
               }
             }
-          }
-        }
+          } else {
+            // No tool requested: if initial check already produced complete text, stream or emit it
+            const initialText = checkRes.text || '';
+            if (initialText) {
+              ttftMs = Date.now() - startTime;
+              fullText = initialText;
+              onDelta(initialText, { ttftMs, elapsedMs: ttftMs });
+            } else {
+              // Stream normally
+              const responseStream = await this.geminiClient.models.generateContentStream({
+                model,
+                contents,
+                config: {
+                  systemInstruction: systemPrompt,
+                  temperature: 0.7,
+                  maxOutputTokens: 250
+                }
+              });
 
-        const totalMs = Date.now() - startTime;
-        onComplete({
-          fullText: fullText.trim(),
-          ttftMs: ttftMs || totalMs,
-          totalMs,
-          provider: 'gemini',
-          model: 'gemini-2.5-flash',
-          toolsUsed: executedTools,
-          interrupted: Boolean(signal?.aborted)
-        });
-        return;
-      } catch (geminiErr) {
-        if (signal?.aborted) {
-          console.log('[LLM Service] Stream aborted cleanly on barge-in.');
+              for await (const chunk of responseStream) {
+                if (signal && signal.aborted) {
+                  console.log('[LLM Stream] Generation aborted by user barge-in.');
+                  break;
+                }
+                const delta = chunk.text || '';
+                if (delta) {
+                  if (ttftMs === null) {
+                    ttftMs = Date.now() - startTime;
+                  }
+                  fullText += delta;
+                  onDelta(delta, { ttftMs, elapsedMs: Date.now() - startTime });
+                }
+              }
+            }
+          }
+
+          const totalMs = Date.now() - startTime;
+          onComplete({
+            fullText: fullText.trim(),
+            ttftMs: ttftMs || totalMs,
+            totalMs,
+            provider: 'gemini',
+            model,
+            toolsUsed: executedTools,
+            interrupted: Boolean(signal?.aborted)
+          });
           return;
-        }
-        console.error('[LLM Service] Gemini error, checking fallback:', geminiErr.message);
-        if (!this.anthropicClient) {
-          onError(geminiErr);
-          return;
+        } catch (geminiErr) {
+          if (signal?.aborted) {
+            console.log('[LLM Service] Stream aborted cleanly on barge-in.');
+            return;
+          }
+          console.warn(`[LLM Service] Gemini model "${model}" error: ${geminiErr.message?.slice(0, 120)}. Trying fallback model...`);
         }
       }
     }
 
-    // 2. Anthropic Claude Fallback with Tool Calling
+    // 2. Anthropic Claude Fallback with Tool Calling (if available)
     if (this.anthropicClient) {
       try {
         const claudeTools = TOOL_DEFINITIONS.map(t => ({
@@ -254,9 +254,13 @@ export class LLMService {
             await stream.finalMessage();
           }
         } else {
-          const textBlock = initialRes.content.find(b => b.type === 'text');
-          fullText = textBlock ? textBlock.text : '';
+          const initialText = initialRes.content
+            .filter(b => b.type === 'text')
+            .map(b => b.text)
+            .join('');
+
           ttftMs = Date.now() - startTime;
+          fullText = initialText;
           onDelta(fullText, { ttftMs, elapsedMs: ttftMs });
         }
 
@@ -271,12 +275,15 @@ export class LLMService {
         });
         return;
       } catch (anthropicErr) {
-        console.error('[LLM Service] Anthropic error:', anthropicErr.message);
-        onError(anthropicErr);
-        return;
+        console.error('[LLM Service] Anthropic fallback error:', anthropicErr.message);
+        if (anthropicErr.message && anthropicErr.message.includes('credit balance is too low')) {
+          onError(new Error('AI service quota temporarily busy. Please wait a moment and try again.'));
+        } else {
+          onError(anthropicErr);
+        }
       }
+    } else {
+      onError(new Error('All Gemini models exhausted. Please wait a moment and retry.'));
     }
-
-    onError(new Error('No LLM API keys configured.'));
   }
 }

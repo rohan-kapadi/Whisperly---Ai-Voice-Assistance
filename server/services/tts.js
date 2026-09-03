@@ -83,7 +83,7 @@ export class ElevenLabsTTS {
     }
 
     const cleanText = text.replace(/[*_#`]/g, '').trim();
-    const url = `https://api.elevenlabs.io/v1/text-to-speech/${this.voiceId}/stream?optimize_streaming_latency=3&output_format=mp3_44100_128`;
+    const url = `https://api.elevenlabs.io/v1/text-to-speech/${this.voiceId}/stream?optimize_streaming_latency=4&output_format=mp3_44100_128`;
 
     try {
       const response = await fetch(url, {
@@ -97,8 +97,8 @@ export class ElevenLabsTTS {
           text: cleanText,
           model_id: this.modelId,
           voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.75
+            stability: 0.45,
+            similarity_boost: 0.82
           }
         })
       });
@@ -108,6 +108,7 @@ export class ElevenLabsTTS {
         throw new Error(`ElevenLabs HTTP ${response.status}: ${errorDetail}`);
       }
 
+      const chunks = [];
       const reader = response.body.getReader();
       while (true) {
         if (signal && signal.aborted) {
@@ -118,9 +119,13 @@ export class ElevenLabsTTS {
         if (done) break;
         if (signal && signal.aborted) break;
         if (value && value.length > 0) {
-          const buffer = Buffer.from(value);
-          onAudioChunk(buffer);
+          chunks.push(Buffer.from(value));
         }
+      }
+
+      if (chunks.length > 0 && (!signal || !signal.aborted)) {
+        const completeSentenceAudio = Buffer.concat(chunks);
+        onAudioChunk(completeSentenceAudio);
       }
     } catch (err) {
       if (err.name === 'AbortError' || signal?.aborted) {
