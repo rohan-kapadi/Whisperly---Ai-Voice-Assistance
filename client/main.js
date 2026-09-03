@@ -45,6 +45,10 @@ const toolsStatusBadge = document.getElementById('tools-status-badge');
 const toolActivityFeed = document.getElementById('tool-activity-feed');
 const toolEmpty = document.getElementById('tool-empty');
 
+// DOM Elements: TTS & Audio Output (Phase 5)
+const ttsTtfaBadge = document.getElementById('tts-ttfa-badge');
+const voicePlaybackHud = document.getElementById('voice-playback-hud');
+
 // DOM Elements: Echo & Test Console
 const echoForm = document.getElementById('echo-form');
 const messageInput = document.getElementById('message-input');
@@ -714,6 +718,105 @@ function handleToolResult(payload) {
 }
 
 // ============================================================================
+// Phase 5: Web Audio Playback Queue & Streaming TTS
+// ============================================================================
+
+let ttsAudioContext = null;
+let nextAudioStartTime = 0;
+let isTtsPlaying = false;
+let currentTurnEndTime = null;
+let firstTtsAudioReceivedTime = null;
+
+function getOrCreateTtsAudioContext() {
+  if (!ttsAudioContext || ttsAudioContext.state === 'closed') {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    ttsAudioContext = new AudioCtx();
+  }
+  if (ttsAudioContext.state === 'suspended') {
+    ttsAudioContext.resume().catch(() => {});
+  }
+  return ttsAudioContext;
+}
+
+function handleTtsStart(payload) {
+  currentTurnEndTime = payload.timestamp || Date.now();
+  firstTtsAudioReceivedTime = null;
+  nextAudioStartTime = 0;
+  isTtsPlaying = false;
+
+  if (voicePlaybackHud) {
+    voicePlaybackHud.classList.remove('hidden');
+  }
+
+  addLog('sys', `Assistant TTS stream started (ElevenLabs Sarah).`);
+}
+
+async function handleTtsAudio(payload) {
+  if (!payload.audio) return;
+
+  const ctx = getOrCreateTtsAudioContext();
+
+  // Decode base64 audio chunk to Uint8Array
+  const binaryStr = atob(payload.audio);
+  const len = binaryStr.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryStr.charCodeAt(i);
+  }
+
+  // Calculate Time-to-First-Audio (TTFA)
+  if (!firstTtsAudioReceivedTime) {
+    firstTtsAudioReceivedTime = Date.now();
+    const ttfa = currentTurnEndTime ? firstTtsAudioReceivedTime - currentTurnEndTime : payload.ttfaMs;
+    if (ttsTtfaBadge && ttfa) {
+      ttsTtfaBadge.textContent = `TTFA: ${ttfa} ms`;
+    }
+    addLog('in', `[TTS Audio] First audio chunk arrived in ${ttfa || payload.ttfaMs}ms!`);
+  }
+
+  try {
+    const audioBuffer = await ctx.decodeAudioData(bytes.buffer.slice(0));
+    scheduleAudioBuffer(ctx, audioBuffer, payload.isLast);
+  } catch (err) {
+    console.error('[TTS Audio Decode Error]:', err);
+  }
+}
+
+function scheduleAudioBuffer(ctx, audioBuffer, isLast) {
+  const source = ctx.createBufferSource();
+  source.buffer = audioBuffer;
+  source.connect(ctx.destination);
+
+  const now = ctx.currentTime;
+  const startTime = Math.max(now, nextAudioStartTime);
+  source.start(startTime);
+  nextAudioStartTime = startTime + audioBuffer.duration;
+
+  isTtsPlaying = true;
+  if (voicePlaybackHud) voicePlaybackHud.classList.remove('hidden');
+
+  source.onended = () => {
+    if (ctx.currentTime >= nextAudioStartTime - 0.05) {
+      isTtsPlaying = false;
+      if (isLast && voicePlaybackHud) {
+        setTimeout(() => {
+          if (!isTtsPlaying && voicePlaybackHud) {
+            voicePlaybackHud.classList.add('hidden');
+          }
+        }, 300);
+      }
+    }
+  };
+}
+
+function handleTtsEnd(payload) {
+  if (payload.ttfaMs && ttsTtfaBadge) {
+    ttsTtfaBadge.textContent = `TTFA: ${payload.ttfaMs} ms`;
+  }
+  addLog('sys', `Assistant TTS stream complete (${payload.totalSentences || 1} sentences synthesized).`);
+}
+
+// ============================================================================
 // Live Waveform & VU Meter
 // ============================================================================
 
@@ -966,6 +1069,22 @@ function handleIncomingMessage(raw) {
 
   if (parsed.type === 'tool_result') {
     handleToolResult(parsed);
+    return;
+  }
+
+  // Phase 5: Streaming TTS Audio Events
+  if (parsed.type === 'tts_start') {
+    handleTtsStart(parsed);
+    return;
+  }
+
+  if (parsed.type === 'tts_audio') {
+    handleTtsAudio(parsed);
+    return;
+  }
+
+  if (parsed.type === 'tts_end') {
+    handleTtsEnd(parsed);
     return;
   }
 

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import { DeepgramLiveStream } from './services/deepgram.js';
 import { LLMService } from './services/llm.js';
+import { ElevenLabsTTS, SentenceChunker } from './services/tts.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,8 +18,9 @@ dotenv.config();
 const PORT = parseInt(process.env.PORT || '8080', 10);
 const HOST = process.env.HOST || '0.0.0.0';
 
-// Initialize LLM service (Gemini primary, Anthropic fallback)
+// Initialize services
 const llmService = new LLMService();
+const ttsService = new ElevenLabsTTS();
 
 // Create standard HTTP server for health check & upgrading to WebSocket
 const server = createServer((req, res) => {
@@ -71,6 +73,51 @@ async function triggerLLMTurn(sessionData, sessionId, ws) {
     );
   }
 
+  // Phase 5: Streaming TTS Setup
+  const turnStartTime = Date.now();
+  const chunker = new SentenceChunker();
+  let firstAudioSent = false;
+  let ttfaMs = null;
+  let ttsQueue = Promise.resolve();
+
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(
+      JSON.stringify({
+        type: 'tts_start',
+        timestamp: turnStartTime
+      })
+    );
+  }
+
+  chunker.on('sentence', ({ text, index, isLast }) => {
+    ttsQueue = ttsQueue.then(async () => {
+      console.log(`[TTS Synthesize] Sentence #${index}: "${text}"`);
+      await ttsService.streamSpeech(text, {
+        onAudioChunk: (audioBuffer) => {
+          if (!firstAudioSent) {
+            firstAudioSent = true;
+            ttfaMs = Date.now() - turnStartTime;
+            console.log(`[TTS First Audio] Session ${sessionId.slice(0, 8)} TTFA: ${ttfaMs}ms`);
+          }
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(
+              JSON.stringify({
+                type: 'tts_audio',
+                audio: audioBuffer.toString('base64'),
+                sentenceIndex: index,
+                isLast,
+                ttfaMs
+              })
+            );
+          }
+        },
+        onError: (err) => {
+          console.error(`[TTS Error] Sentence #${index}:`, err.message);
+        }
+      });
+    });
+  });
+
   await llmService.streamResponse({
     messages: sessionData.history,
     onStart: () => {},
@@ -102,6 +149,8 @@ async function triggerLLMTurn(sessionData, sessionId, ws) {
       }
     },
     onDelta: (delta, { ttftMs, elapsedMs }) => {
+      chunker.push(delta);
+
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(
           JSON.stringify({
@@ -113,7 +162,7 @@ async function triggerLLMTurn(sessionData, sessionId, ws) {
         );
       }
     },
-    onComplete: ({ fullText, ttftMs, totalMs, provider, model, toolsUsed }) => {
+    onComplete: async ({ fullText, ttftMs, totalMs, provider, model, toolsUsed }) => {
       sessionData.isGenerating = false;
       sessionData.history.push({ role: 'assistant', content: fullText });
       console.log(`[LLM Turn DONE] Session ${sessionId.slice(0, 8)} (${provider} TTFT: ${ttftMs}ms, Total: ${totalMs}ms)`);
@@ -132,6 +181,20 @@ async function triggerLLMTurn(sessionData, sessionId, ws) {
             provider,
             model,
             toolsUsed
+          })
+        );
+      }
+
+      // Flush remaining sentences to ElevenLabs TTS
+      chunker.flush();
+      await ttsQueue;
+
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(
+          JSON.stringify({
+            type: 'tts_end',
+            ttfaMs,
+            totalSentences: chunker.sentenceIndex
           })
         );
       }

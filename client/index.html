@@ -27,7 +27,7 @@
           </svg>
         </div>
         <div>
-          <h1>Voice Assistant <span class="badge-phase">Phase 2</span></h1>
+          <h1>Voice Assistant <span class="badge-phase">Phase 5</span></h1>
           <p class="subtitle">Real-Time Streaming Voice Intelligence</p>
         </div>
       </div>
@@ -123,14 +123,31 @@
           <div class="stt-meta-tags">
             <span class="card-tag">Deepgram Nova-2</span>
             <span id="llm-model-badge" class="card-tag">Gemini 2.5 Flash</span>
+            <span class="card-tag">ElevenLabs Turbo</span>
             <span id="stt-latency-badge" class="card-tag tag-latency">STT: -- ms</span>
             <span id="llm-ttft-badge" class="card-tag tag-ttft">TTFT: -- ms</span>
+            <span id="tts-ttfa-badge" class="card-tag tag-ttfa">TTFA: -- ms</span>
           </div>
         </div>
 
         <p class="section-desc">
-          Full speech-to-text and streaming LLM conversation. Speak or simulate a turn; watch real-time transcription endpointing and streaming assistant replies.
+          Full voice conversation loop. Spoken queries transcribe in real-time, execute tools when needed, stream LLM text, and synthesize streaming voice via ElevenLabs.
         </p>
+
+        <!-- Live Voice Playback Banner (Active Assistant Speech) -->
+        <div id="voice-playback-hud" class="voice-playback-hud hidden">
+          <div class="playback-header">
+            <span class="pulse-speaker-dot"></span>
+            <span class="playback-title">Assistant Speaking (Streaming Audio)...</span>
+          </div>
+          <div class="speaker-wave-bars">
+            <span class="bar bar-1"></span>
+            <span class="bar bar-2"></span>
+            <span class="bar bar-3"></span>
+            <span class="bar bar-4"></span>
+            <span class="bar bar-5"></span>
+          </div>
+        </div>
 
         <!-- Live Interim Box (Active Speech Indicator) -->
         <div id="live-interim-box" class="live-interim-box hidden">
@@ -147,7 +164,7 @@
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
             </svg>
-            <p>Speak into your microphone or send a prompt. Spoken turns and streaming assistant replies will appear here.</p>
+            <p>Speak into your microphone or send a prompt. Real-time spoken dialogue, tools, and streaming voice playback will appear here.</p>
           </div>
         </div>
       </section>
@@ -296,9 +313,9 @@
         <span class="step-divider">→</span>
         <span class="step done">3: LLM Stream ✓</span>
         <span class="step-divider">→</span>
-        <span class="step active">4: Tools (Active)</span>
+        <span class="step done">4: Tools ✓</span>
         <span class="step-divider">→</span>
-        <span class="step">5: TTS</span>
+        <span class="step active">5: TTS Voice (Active)</span>
         <span class="step-divider">→</span>
         <span class="step">6: Barge-in</span>
       </div>
