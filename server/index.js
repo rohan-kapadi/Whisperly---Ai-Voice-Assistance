@@ -8,8 +8,27 @@ import { DeepgramLiveStream } from './services/deepgram.js';
 import { LLMService } from './services/llm.js';
 import { ElevenLabsTTS, SentenceChunker } from './services/tts.js';
 
+import fs from 'node:fs';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Path to built frontend assets
+const CLIENT_DIST = path.resolve(__dirname, '../client/dist');
+
+const MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.ico': 'image/x-icon',
+  '.svg': 'image/svg+xml',
+  '.wav': 'audio/wav',
+  '.mp3': 'audio/mpeg'
+};
 
 // Load .env from project root or server folder
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
@@ -22,13 +41,40 @@ const HOST = process.env.HOST || '0.0.0.0';
 const llmService = new LLMService();
 const ttsService = new ElevenLabsTTS();
 
-// Create standard HTTP server for health check & upgrading to WebSocket
+// Create standard HTTP server for static UI delivery & WebSocket upgrading
 const server = createServer((req, res) => {
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() }));
     return;
   }
+
+  // Serve static frontend assets from client/dist if present
+  if (fs.existsSync(CLIENT_DIST)) {
+    const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    let reqPath = decodeURIComponent(parsedUrl.pathname);
+    if (reqPath === '/') reqPath = '/index.html';
+
+    const safePath = path.normalize(reqPath).replace(/^(\.\.[\/\\])+/, '');
+    const filePath = path.join(CLIENT_DIST, safePath);
+
+    if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+      const ext = path.extname(filePath).toLowerCase();
+      const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+      res.writeHead(200, { 'Content-Type': contentType });
+      fs.createReadStream(filePath).pipe(res);
+      return;
+    }
+
+    // SPA fallback to index.html
+    const indexPath = path.join(CLIENT_DIST, 'index.html');
+    if (fs.existsSync(indexPath)) {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      fs.createReadStream(indexPath).pipe(res);
+      return;
+    }
+  }
+
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('Voice Assistant WebSocket Server is running.');
 });

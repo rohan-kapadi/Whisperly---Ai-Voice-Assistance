@@ -4,6 +4,8 @@
   "description": "Low-latency streaming voice assistant with tool calling and barge-in",
   "private": true,
   "scripts": {
+    "build": "npm --prefix client install && npm --prefix client run build && npm --prefix server install",
+    "start": "node server/index.js",
     "dev:server": "npm --prefix server run dev",
     "dev:client": "npm --prefix client run dev",
     "install:all": "npm --prefix server install && npm --prefix client install"
