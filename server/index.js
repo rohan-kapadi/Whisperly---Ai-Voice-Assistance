@@ -74,6 +74,33 @@ async function triggerLLMTurn(sessionData, sessionId, ws) {
   await llmService.streamResponse({
     messages: sessionData.history,
     onStart: () => {},
+    onToolCall: ({ name, args, timestamp }) => {
+      console.log(`[Relay Tool Call] ${name}:`, JSON.stringify(args));
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(
+          JSON.stringify({
+            type: 'tool_call',
+            name,
+            args,
+            timestamp: timestamp || Date.now()
+          })
+        );
+      }
+    },
+    onToolResult: ({ name, args, result, timestamp }) => {
+      console.log(`[Relay Tool Result] ${name}:`, JSON.stringify(result));
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(
+          JSON.stringify({
+            type: 'tool_result',
+            name,
+            args,
+            result,
+            timestamp: timestamp || Date.now()
+          })
+        );
+      }
+    },
     onDelta: (delta, { ttftMs, elapsedMs }) => {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(
@@ -86,10 +113,13 @@ async function triggerLLMTurn(sessionData, sessionId, ws) {
         );
       }
     },
-    onComplete: ({ fullText, ttftMs, totalMs, provider, model }) => {
+    onComplete: ({ fullText, ttftMs, totalMs, provider, model, toolsUsed }) => {
       sessionData.isGenerating = false;
       sessionData.history.push({ role: 'assistant', content: fullText });
       console.log(`[LLM Turn DONE] Session ${sessionId.slice(0, 8)} (${provider} TTFT: ${ttftMs}ms, Total: ${totalMs}ms)`);
+      if (toolsUsed && toolsUsed.length > 0) {
+        console.log(`[Tools Executed]: ${toolsUsed.map(t => t.name).join(', ')}`);
+      }
       console.log(`Assistant: "${fullText}"\n`);
 
       if (ws.readyState === WebSocket.OPEN) {
@@ -100,7 +130,8 @@ async function triggerLLMTurn(sessionData, sessionId, ws) {
             ttftMs,
             totalMs,
             provider,
-            model
+            model,
+            toolsUsed
           })
         );
       }

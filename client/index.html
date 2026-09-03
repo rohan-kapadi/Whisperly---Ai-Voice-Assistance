@@ -231,6 +231,44 @@
         </div>
       </section>
 
+      <!-- Tool Execution & Database Card (Phase 4 Focus) -->
+      <section class="card glass-card tools-card">
+        <div class="card-header">
+          <div class="header-with-badge">
+            <h2>Real Tool Calling Layer</h2>
+            <span id="tools-status-badge" class="badge-live badge-inactive">5 TOOLS READY</span>
+          </div>
+          <div class="stt-meta-tags">
+            <span class="card-tag">SQLite Database</span>
+            <span class="card-tag">Open-Meteo Weather</span>
+          </div>
+        </div>
+
+        <p class="section-desc">
+          The assistant autonomously invokes real functions: creating/listing SQLite reminders, saving/searching SQLite notes, and fetching live weather.
+        </p>
+
+        <!-- Live Tool Activity Feed -->
+        <div id="tool-activity-feed" class="tool-activity-feed">
+          <div class="tool-empty-placeholder" id="tool-empty">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+            </svg>
+            <p>Ask for a reminder, weather, or notes. Live tool executions and database queries will appear here.</p>
+          </div>
+        </div>
+
+        <!-- Tool Quick Query Chips -->
+        <div class="tool-chips-row">
+          <span class="chip-label">Try Voice / Chat:</span>
+          <button type="button" class="chip tool-chip" data-msg='{"type": "chat", "text": "What is the weather in Pune right now?"}'>🌦️ Weather: Pune</button>
+          <button type="button" class="chip tool-chip" data-msg='{"type": "chat", "text": "Remind me to call mom tomorrow at 5 PM"}'>⏰ Set Reminder</button>
+          <button type="button" class="chip tool-chip" data-msg='{"type": "chat", "text": "What are my current reminders?"}'>📋 List Reminders</button>
+          <button type="button" class="chip tool-chip" data-msg='{"type": "chat", "text": "Add a note that project presentation is on Friday"}'>📝 Add Note</button>
+          <button type="button" class="chip tool-chip" data-msg='{"type": "chat", "text": "Search my notes for presentation"}'>🔍 Search Notes</button>
+        </div>
+      </section>
+
       <!-- Activity & Log Stream -->
       <section class="card glass-card logs-card">
         <div class="card-header">
@@ -256,9 +294,9 @@
         <span class="step-divider">→</span>
         <span class="step done">2: STT ✓</span>
         <span class="step-divider">→</span>
-        <span class="step active">3: LLM Stream (Active)</span>
+        <span class="step done">3: LLM Stream ✓</span>
         <span class="step-divider">→</span>
-        <span class="step">4: Tools</span>
+        <span class="step active">4: Tools (Active)</span>
         <span class="step-divider">→</span>
         <span class="step">5: TTS</span>
         <span class="step-divider">→</span>

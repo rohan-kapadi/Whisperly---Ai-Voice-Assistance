@@ -1,16 +1,17 @@
 import { GoogleGenAI } from '@google/genai';
 import Anthropic from '@anthropic-ai/sdk';
+import { TOOL_DEFINITIONS, executeTool } from './tools.js';
 
 const VOICE_SYSTEM_PROMPT = `You are a real-time, helpful AI voice assistant.
 Your responses are spoken aloud to the user, so:
 1. Keep replies concise, conversational, and direct (1 to 2 short sentences unless the user explicitly requests more detail).
 2. Use natural conversational English.
 3. NEVER use markdown formatting, bullet points, asterisks, bolding, emojis, or lists that sound awkward when read aloud.
-4. Speak warmly and naturally.`;
+4. When you call a tool (like setting a reminder, getting the weather, or adding a note), summarize the result naturally in a single conversational sentence.`;
 
 /**
  * LLMService
- * Orchestrates streaming LLM responses with low Time-to-First-Token (TTFT).
+ * Orchestrates streaming LLM responses with real-time tool calling.
  * Supports Gemini (default) and Anthropic Claude.
  */
 export class LLMService {
@@ -29,18 +30,11 @@ export class LLMService {
     }
 
     this.preferredProvider = this.geminiClient ? 'gemini' : (this.anthropicClient ? 'anthropic' : 'none');
-    console.log(`[LLM Service] Initialized. Primary Provider: ${this.preferredProvider.toUpperCase()}`);
+    console.log(`[LLM Service] Initialized with Tools. Primary Provider: ${this.preferredProvider.toUpperCase()}`);
   }
 
   /**
-   * Stream LLM response
-   * @param {Object} options
-   * @param {Array<{role: string, content: string}>} options.messages - conversation history
-   * @param {string} [options.systemPrompt]
-   * @param {Function} options.onStart
-   * @param {Function} options.onDelta
-   * @param {Function} options.onComplete
-   * @param {Function} options.onError
+   * Stream LLM response with tool execution loop
    */
   async streamResponse(options) {
     const {
@@ -49,22 +43,22 @@ export class LLMService {
       onStart = () => {},
       onDelta = () => {},
       onComplete = () => {},
-      onError = () => {}
+      onError = () => {},
+      onToolCall = () => {},
+      onToolResult = () => {}
     } = options;
 
     const startTime = Date.now();
     let ttftMs = null;
     let fullText = '';
+    let executedTools = [];
 
     onStart();
 
-    // Use Gemini if available
+    // 1. Gemini Implementation with Tool Calling
     if (this.geminiClient) {
       try {
-        // Format history for Gemini contents
         const contents = [];
-
-        // Insert system instruction through prompt or configuration
         for (const msg of messages) {
           contents.push({
             role: msg.role === 'assistant' ? 'model' : 'user',
@@ -72,24 +66,100 @@ export class LLMService {
           });
         }
 
-        const responseStream = await this.geminiClient.models.generateContentStream({
+        const toolsConfig = [{
+          functionDeclarations: TOOL_DEFINITIONS.map(t => ({
+            name: t.name,
+            description: t.description,
+            parameters: t.parameters
+          }))
+        }];
+
+        // First, check if the LLM desires to invoke a tool
+        const checkRes = await this.geminiClient.models.generateContent({
           model: 'gemini-2.5-flash',
           contents,
           config: {
             systemInstruction: systemPrompt,
-            temperature: 0.7,
-            maxOutputTokens: 250
+            tools: toolsConfig,
+            temperature: 0.5
           }
         });
 
-        for await (const chunk of responseStream) {
-          const delta = chunk.text || '';
-          if (delta) {
-            if (ttftMs === null) {
-              ttftMs = Date.now() - startTime;
+        // If tool call is requested, execute tool and feed result back
+        if (checkRes.functionCalls && checkRes.functionCalls.length > 0) {
+          for (const call of checkRes.functionCalls) {
+            console.log(`[LLM Tool Call] ${call.name}:`, JSON.stringify(call.args));
+            onToolCall({ name: call.name, args: call.args, timestamp: Date.now() });
+
+            const toolResult = await executeTool(call.name, call.args);
+            executedTools.push({ name: call.name, args: call.args, result: toolResult });
+            onToolResult({ name: call.name, args: call.args, result: toolResult, timestamp: Date.now() });
+
+            contents.push({
+              role: 'model',
+              parts: [{ functionCall: call }]
+            });
+            contents.push({
+              role: 'user',
+              parts: [{
+                functionResponse: {
+                  name: call.name,
+                  response: toolResult
+                }
+              }]
+            });
+          }
+
+          // Stream the final natural language summary of the tool result
+          const responseStream = await this.geminiClient.models.generateContentStream({
+            model: 'gemini-2.5-flash',
+            contents,
+            config: {
+              systemInstruction: systemPrompt,
+              temperature: 0.6,
+              maxOutputTokens: 250
             }
-            fullText += delta;
-            onDelta(delta, { ttftMs, elapsedMs: Date.now() - startTime });
+          });
+
+          for await (const chunk of responseStream) {
+            const delta = chunk.text || '';
+            if (delta) {
+              if (ttftMs === null) {
+                ttftMs = Date.now() - startTime;
+              }
+              fullText += delta;
+              onDelta(delta, { ttftMs, elapsedMs: Date.now() - startTime });
+            }
+          }
+        } else {
+          // No tool requested: if initial check already produced complete text, stream or emit it
+          const initialText = checkRes.text || '';
+          if (initialText) {
+            ttftMs = Date.now() - startTime;
+            fullText = initialText;
+            onDelta(initialText, { ttftMs, elapsedMs: ttftMs });
+          } else {
+            // Stream normally
+            const responseStream = await this.geminiClient.models.generateContentStream({
+              model: 'gemini-2.5-flash',
+              contents,
+              config: {
+                systemInstruction: systemPrompt,
+                temperature: 0.7,
+                maxOutputTokens: 250
+              }
+            });
+
+            for await (const chunk of responseStream) {
+              const delta = chunk.text || '';
+              if (delta) {
+                if (ttftMs === null) {
+                  ttftMs = Date.now() - startTime;
+                }
+                fullText += delta;
+                onDelta(delta, { ttftMs, elapsedMs: Date.now() - startTime });
+              }
+            }
           }
         }
 
@@ -99,7 +169,8 @@ export class LLMService {
           ttftMs: ttftMs || totalMs,
           totalMs,
           provider: 'gemini',
-          model: 'gemini-2.5-flash'
+          model: 'gemini-2.5-flash',
+          toolsUsed: executedTools
         });
         return;
       } catch (geminiErr) {
@@ -111,36 +182,78 @@ export class LLMService {
       }
     }
 
-    // Fallback or Primary Anthropic Claude
+    // 2. Anthropic Claude Fallback with Tool Calling
     if (this.anthropicClient) {
       try {
-        const stream = this.anthropicClient.messages.stream({
+        const claudeTools = TOOL_DEFINITIONS.map(t => ({
+          name: t.name,
+          description: t.description,
+          input_schema: t.parameters
+        }));
+
+        let currentMessages = messages.map(m => ({
+          role: m.role,
+          content: m.content
+        }));
+
+        const initialRes = await this.anthropicClient.messages.create({
           model: 'claude-3-5-haiku-latest',
           system: systemPrompt,
           max_tokens: 250,
-          messages: messages.map((m) => ({
-            role: m.role,
-            content: m.content
-          }))
+          tools: claudeTools,
+          messages: currentMessages
         });
 
-        stream.on('text', (delta) => {
-          if (ttftMs === null) {
-            ttftMs = Date.now() - startTime;
+        if (initialRes.stop_reason === 'tool_use') {
+          const toolUseBlock = initialRes.content.find(b => b.type === 'tool_use');
+          if (toolUseBlock) {
+            onToolCall({ name: toolUseBlock.name, args: toolUseBlock.input });
+            const toolResult = await executeTool(toolUseBlock.name, toolUseBlock.input);
+            executedTools.push({ name: toolUseBlock.name, args: toolUseBlock.input, result: toolResult });
+            onToolResult({ name: toolUseBlock.name, result: toolResult });
+
+            currentMessages.push({ role: 'assistant', content: initialRes.content });
+            currentMessages.push({
+              role: 'user',
+              content: [
+                {
+                  type: 'tool_result',
+                  tool_use_id: toolUseBlock.id,
+                  content: JSON.stringify(toolResult)
+                }
+              ]
+            });
+
+            const stream = this.anthropicClient.messages.stream({
+              model: 'claude-3-5-haiku-latest',
+              system: systemPrompt,
+              max_tokens: 250,
+              messages: currentMessages
+            });
+
+            stream.on('text', (delta) => {
+              if (ttftMs === null) ttftMs = Date.now() - startTime;
+              fullText += delta;
+              onDelta(delta, { ttftMs, elapsedMs: Date.now() - startTime });
+            });
+
+            await stream.finalMessage();
           }
-          fullText += delta;
-          onDelta(delta, { ttftMs, elapsedMs: Date.now() - startTime });
-        });
+        } else {
+          const textBlock = initialRes.content.find(b => b.type === 'text');
+          fullText = textBlock ? textBlock.text : '';
+          ttftMs = Date.now() - startTime;
+          onDelta(fullText, { ttftMs, elapsedMs: ttftMs });
+        }
 
-        const finalMessage = await stream.finalMessage();
         const totalMs = Date.now() - startTime;
-
         onComplete({
           fullText: fullText.trim(),
           ttftMs: ttftMs || totalMs,
           totalMs,
           provider: 'anthropic',
-          model: 'claude-3-5-haiku-latest'
+          model: 'claude-3-5-haiku-latest',
+          toolsUsed: executedTools
         });
         return;
       } catch (anthropicErr) {
@@ -150,6 +263,6 @@ export class LLMService {
       }
     }
 
-    onError(new Error('No LLM API keys configured (GEMINI_API_KEY or ANTHROPIC_API_KEY required).'));
+    onError(new Error('No LLM API keys configured.'));
   }
 }

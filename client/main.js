@@ -40,6 +40,11 @@ const interimText = document.getElementById('interim-text');
 const transcriptFeed = document.getElementById('transcript-feed');
 const transcriptEmpty = document.getElementById('transcript-empty');
 
+// DOM Elements: Tool Layer (Phase 4)
+const toolsStatusBadge = document.getElementById('tools-status-badge');
+const toolActivityFeed = document.getElementById('tool-activity-feed');
+const toolEmpty = document.getElementById('tool-empty');
+
 // DOM Elements: Echo & Test Console
 const echoForm = document.getElementById('echo-form');
 const messageInput = document.getElementById('message-input');
@@ -128,6 +133,14 @@ btnClearLogs.addEventListener('click', () => {
 });
 
 quickChips.forEach((chip) => {
+  chip.addEventListener('click', () => {
+    const msg = chip.getAttribute('data-msg');
+    if (msg) sendMessage(msg);
+  });
+});
+
+const toolChips = document.querySelectorAll('.tool-chip');
+toolChips.forEach((chip) => {
   chip.addEventListener('click', () => {
     const msg = chip.getAttribute('data-msg');
     if (msg) sendMessage(msg);
@@ -630,6 +643,77 @@ function handleAssistantError(payload) {
 }
 
 // ============================================================================
+// Phase 4: Tool Execution Handlers
+// ============================================================================
+
+function handleToolCall(payload) {
+  if (toolsStatusBadge) {
+    toolsStatusBadge.textContent = `CALL: ${payload.name.toUpperCase()}`;
+    toolsStatusBadge.className = 'badge-live badge-active';
+  }
+
+  if (toolEmpty) {
+    toolEmpty.style.display = 'none';
+  }
+
+  if (toolActivityFeed) {
+    const item = document.createElement('div');
+    item.className = 'tool-item';
+    item.id = `tool-exec-${payload.name}-${payload.timestamp || Date.now()}`;
+
+    const now = new Date();
+    const timeStr = now.toTimeString().split(' ')[0];
+
+    item.innerHTML = `
+      <div class="tool-item-header">
+        <span class="tool-badge">⚙️ ${escapeHtml(payload.name)}</span>
+        <span class="tool-item-time">${timeStr}</span>
+      </div>
+      <div class="tool-args">Input: ${escapeHtml(JSON.stringify(payload.args || {}))}</div>
+      <div class="tool-result">Executing...</div>
+    `;
+
+    toolActivityFeed.appendChild(item);
+    toolActivityFeed.scrollTop = toolActivityFeed.scrollHeight;
+  }
+
+  // Also render an inline mini badge inside the dialogue feed
+  if (transcriptFeed) {
+    const pill = document.createElement('div');
+    pill.className = 'transcript-item-meta';
+    pill.style.padding = '0.35rem 0.6rem';
+    pill.style.background = 'rgba(245, 158, 11, 0.08)';
+    pill.style.borderRadius = '4px';
+    pill.style.margin = '0.25rem 0';
+    pill.innerHTML = `
+      <span class="tool-badge" style="font-size: 0.72rem;">⚙️ Invoking Tool: ${escapeHtml(payload.name)}</span>
+      <span style="font-size: 0.7rem; color: #fbbf24; font-family: var(--font-mono);">${escapeHtml(JSON.stringify(payload.args || {}))}</span>
+    `;
+    transcriptFeed.appendChild(pill);
+    transcriptFeed.scrollTop = transcriptFeed.scrollHeight;
+  }
+
+  addLog('in', `[Tool Call] ${payload.name} (${JSON.stringify(payload.args)})`);
+}
+
+function handleToolResult(payload) {
+  if (toolsStatusBadge) {
+    toolsStatusBadge.textContent = 'TOOL COMPLETE';
+    toolsStatusBadge.className = 'badge-live badge-active';
+  }
+
+  if (toolActivityFeed) {
+    const results = toolActivityFeed.querySelectorAll('.tool-result');
+    if (results.length > 0) {
+      const lastResult = results[results.length - 1];
+      lastResult.textContent = `Result: ${JSON.stringify(payload.result)}`;
+    }
+  }
+
+  addLog('in', `[Tool Result] ${payload.name}: ${JSON.stringify(payload.result)}`);
+}
+
+// ============================================================================
 // Live Waveform & VU Meter
 // ============================================================================
 
@@ -871,6 +955,17 @@ function handleIncomingMessage(raw) {
 
   if (parsed.type === 'assistant_error') {
     handleAssistantError(parsed);
+    return;
+  }
+
+  // Phase 4: Tool Execution Events
+  if (parsed.type === 'tool_call') {
+    handleToolCall(parsed);
+    return;
+  }
+
+  if (parsed.type === 'tool_result') {
+    handleToolResult(parsed);
     return;
   }
 
