@@ -1162,6 +1162,78 @@ body {
   100% { transform: scaleY(1); }
 }
 
+/* ==========================================================================
+   Barge-In / Interruption Handling (Phase 6)
+   ========================================================================== */
+
+.tag-bargein {
+  background: rgba(239, 68, 68, 0.12);
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.playback-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.btn-interrupt {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(239, 68, 68, 0.18);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  color: #fca5a5;
+  padding: 0.3rem 0.65rem;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-interrupt:hover {
+  background: rgba(239, 68, 68, 0.35);
+  border-color: #ef4444;
+  color: #fff;
+  transform: scale(1.03);
+}
+
+.barge-in-alert {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.85rem;
+  margin-bottom: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #fca5a5;
+  font-size: 0.78rem;
+  font-family: var(--font-mono);
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.2);
+  animation: flash-shake 0.35s ease-out;
+}
+
+.barge-in-alert.hidden {
+  display: none;
+}
+
+.alert-bolt {
+  font-size: 0.95rem;
+}
+
+@keyframes flash-shake {
+  0% { opacity: 0; transform: translateY(-4px); }
+  25% { transform: translateX(2px); }
+  50% { transform: translateX(-2px); }
+  75% { transform: translateX(1px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+
 
 
 

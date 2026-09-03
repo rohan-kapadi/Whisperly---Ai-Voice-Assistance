@@ -47,6 +47,28 @@ const sessions = new Map();
 /**
  * Triggers LLM generation for a completed user turn
  */
+function handleInterrupt(sessionData, sessionId, ws, reason = 'barge_in') {
+  const start = Date.now();
+  if (sessionData.currentAbortController) {
+    sessionData.currentAbortController.abort();
+    sessionData.currentAbortController = null;
+  }
+  sessionData.isGenerating = false;
+  sessionData.isSpeaking = false;
+  console.log(`\n[Barge-In] Session ${sessionId.slice(0, 8)} interrupted (${reason})`);
+
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(
+      JSON.stringify({
+        type: 'interrupted',
+        reason,
+        timestamp: Date.now(),
+        latencyMs: Date.now() - start
+      })
+    );
+  }
+}
+
 async function triggerLLMTurn(sessionData, sessionId, ws) {
   if (sessionData.silenceTimer) {
     clearTimeout(sessionData.silenceTimer);
@@ -56,7 +78,15 @@ async function triggerLLMTurn(sessionData, sessionId, ws) {
   const userText = sessionData.currentUtterance.trim();
   if (!userText || sessionData.isGenerating) return;
 
+  // Cancel any existing generation / speech
+  if (sessionData.currentAbortController) {
+    sessionData.currentAbortController.abort();
+  }
+  const abortController = new AbortController();
+  sessionData.currentAbortController = abortController;
+
   sessionData.isGenerating = true;
+  sessionData.isSpeaking = true;
   sessionData.currentUtterance = '';
 
   // Add user message to conversation history
@@ -73,7 +103,7 @@ async function triggerLLMTurn(sessionData, sessionId, ws) {
     );
   }
 
-  // Phase 5: Streaming TTS Setup
+  // Phase 5 & 6: Streaming TTS Setup with AbortSignal
   const turnStartTime = Date.now();
   const chunker = new SentenceChunker();
   let firstAudioSent = false;
@@ -90,10 +120,15 @@ async function triggerLLMTurn(sessionData, sessionId, ws) {
   }
 
   chunker.on('sentence', ({ text, index, isLast }) => {
+    if (abortController.signal.aborted) return;
+
     ttsQueue = ttsQueue.then(async () => {
+      if (abortController.signal.aborted) return;
       console.log(`[TTS Synthesize] Sentence #${index}: "${text}"`);
       await ttsService.streamSpeech(text, {
+        signal: abortController.signal,
         onAudioChunk: (audioBuffer) => {
+          if (abortController.signal.aborted) return;
           if (!firstAudioSent) {
             firstAudioSent = true;
             ttfaMs = Date.now() - turnStartTime;
@@ -112,7 +147,9 @@ async function triggerLLMTurn(sessionData, sessionId, ws) {
           }
         },
         onError: (err) => {
-          console.error(`[TTS Error] Sentence #${index}:`, err.message);
+          if (!abortController.signal.aborted) {
+            console.error(`[TTS Error] Sentence #${index}:`, err.message);
+          }
         }
       });
     });
@@ -120,6 +157,7 @@ async function triggerLLMTurn(sessionData, sessionId, ws) {
 
   await llmService.streamResponse({
     messages: sessionData.history,
+    signal: abortController.signal,
     onStart: () => {},
     onToolCall: ({ name, args, timestamp }) => {
       console.log(`[Relay Tool Call] ${name}:`, JSON.stringify(args));
@@ -255,6 +293,12 @@ function getOrCreateDeepgram(sessionData, sessionId, ws) {
   deepgram.on('interim', (data) => {
     sessionData.currentUtterance = data.text;
     console.log(`[STT Interim] ${sessionId.slice(0, 8)}: "${data.text}" (${data.latencyMs}ms)`);
+
+    // Dual-Path Barge-In: If user begins speaking while assistant is speaking, abort assistant speech
+    if (sessionData.isSpeaking && data.text && data.text.trim().length > 0) {
+      handleInterrupt(sessionData, sessionId, ws, 'stt_voice_detected');
+    }
+
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(
         JSON.stringify({
@@ -341,6 +385,8 @@ wss.on('connection', (ws, req) => {
     history: [],
     currentUtterance: '',
     isGenerating: false,
+    isSpeaking: false,
+    currentAbortController: null,
     silenceTimer: null,
     audioStats: {
       totalChunks: 0,
@@ -481,6 +527,9 @@ wss.on('connection', (ws, req) => {
         // Direct text test to LLM
         sessionData.currentUtterance = parsed.text || parsed.content || '';
         triggerLLMTurn(sessionData, sessionId, ws);
+      } else if (parsed.type === 'interrupt') {
+        // Barge-in interruption requested by client
+        handleInterrupt(sessionData, sessionId, ws, parsed.reason || 'client_vad');
       } else {
         // General echo response
         ws.send(

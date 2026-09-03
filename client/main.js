@@ -49,6 +49,12 @@ const toolEmpty = document.getElementById('tool-empty');
 const ttsTtfaBadge = document.getElementById('tts-ttfa-badge');
 const voicePlaybackHud = document.getElementById('voice-playback-hud');
 
+// DOM Elements: Barge-In (Phase 6)
+const bargeinBadge = document.getElementById('bargein-badge');
+const btnManualInterrupt = document.getElementById('btn-manual-interrupt');
+const bargeInAlert = document.getElementById('barge-in-alert');
+const bargeInText = document.getElementById('barge-in-text');
+
 // DOM Elements: Echo & Test Console
 const echoForm = document.getElementById('echo-form');
 const messageInput = document.getElementById('message-input');
@@ -150,6 +156,12 @@ toolChips.forEach((chip) => {
     if (msg) sendMessage(msg);
   });
 });
+
+if (btnManualInterrupt) {
+  btnManualInterrupt.addEventListener('click', () => {
+    triggerBargeIn('manual_button');
+  });
+}
 
 // ============================================================================
 // WebSocket Transport Logic
@@ -372,6 +384,11 @@ function setupAudioNodes(inputSourceNode) {
         updateAudioStatsUI();
       }
       updateVuMeter(rms);
+
+      // Phase 6 Fast VAD Barge-In: If user speaks while assistant is speaking, cut off audio immediately
+      if (isTtsPlaying && rms > 0.16) {
+        triggerBargeIn('mic_energy_vad');
+      }
     }
   };
 }
@@ -726,6 +743,8 @@ let nextAudioStartTime = 0;
 let isTtsPlaying = false;
 let currentTurnEndTime = null;
 let firstTtsAudioReceivedTime = null;
+let activeAudioSources = [];
+let bargeInTimeout = null;
 
 function getOrCreateTtsAudioContext() {
   if (!ttsAudioContext || ttsAudioContext.state === 'closed') {
@@ -736,6 +755,61 @@ function getOrCreateTtsAudioContext() {
     ttsAudioContext.resume().catch(() => {});
   }
   return ttsAudioContext;
+}
+
+/**
+ * Phase 6: Immediately cuts off local Web Audio playback and flashes barge-in indicator
+ */
+function stopTtsPlayback(reason = 'barge_in') {
+  const cutoffStart = performance.now();
+
+  // 1. Instantly stop and disconnect all active playing audio buffer sources (< 10ms)
+  for (const source of activeAudioSources) {
+    try {
+      source.stop();
+      source.disconnect();
+    } catch {}
+  }
+  activeAudioSources = [];
+  nextAudioStartTime = 0;
+  isTtsPlaying = false;
+
+  // 2. Hide voice playback HUD
+  if (voicePlaybackHud) {
+    voicePlaybackHud.classList.add('hidden');
+  }
+
+  // 3. Render Barge-In flash alert banner
+  const elapsedMs = Math.round(performance.now() - cutoffStart);
+  if (bargeInAlert && bargeInText) {
+    bargeInText.textContent = `⚡ Barge-in triggered (${reason})! Local playback cut off in ${elapsedMs}ms.`;
+    bargeInAlert.classList.remove('hidden');
+
+    if (bargeInTimeout) clearTimeout(bargeInTimeout);
+    bargeInTimeout = setTimeout(() => {
+      bargeInAlert.classList.add('hidden');
+    }, 2800);
+  }
+
+  // 4. Update Barge-In badge
+  if (bargeinBadge) {
+    bargeinBadge.textContent = 'Barge-In: Active (<50ms)';
+    bargeinBadge.style.color = '#ef4444';
+    bargeinBadge.style.borderColor = 'rgba(239, 68, 68, 0.6)';
+    setTimeout(() => {
+      bargeinBadge.textContent = 'Barge-in: Ready';
+      bargeinBadge.style.color = '';
+      bargeinBadge.style.borderColor = '';
+    }, 3000);
+  }
+
+  addLog('sys', `[Barge-In] Local speech playback stopped in ${elapsedMs}ms (${reason}).`);
+}
+
+function triggerBargeIn(reason = 'manual_interrupt') {
+  stopTtsPlayback(reason);
+  sendMessage(JSON.stringify({ type: 'interrupt', reason }));
+  addLog('out', `[Barge-In Request] Sent interrupt signal to server (${reason})`);
 }
 
 function handleTtsStart(payload) {
@@ -786,6 +860,7 @@ function scheduleAudioBuffer(ctx, audioBuffer, isLast) {
   const source = ctx.createBufferSource();
   source.buffer = audioBuffer;
   source.connect(ctx.destination);
+  activeAudioSources.push(source);
 
   const now = ctx.currentTime;
   const startTime = Math.max(now, nextAudioStartTime);
@@ -796,6 +871,7 @@ function scheduleAudioBuffer(ctx, audioBuffer, isLast) {
   if (voicePlaybackHud) voicePlaybackHud.classList.remove('hidden');
 
   source.onended = () => {
+    activeAudioSources = activeAudioSources.filter((s) => s !== source);
     if (ctx.currentTime >= nextAudioStartTime - 0.05) {
       isTtsPlaying = false;
       if (isLast && voicePlaybackHud) {
@@ -1085,6 +1161,13 @@ function handleIncomingMessage(raw) {
 
   if (parsed.type === 'tts_end') {
     handleTtsEnd(parsed);
+    return;
+  }
+
+  // Phase 6: Barge-In Interrupted Event
+  if (parsed.type === 'interrupted') {
+    stopTtsPlayback(parsed.reason || 'server_confirmed');
+    addLog('in', `[Barge-In Confirmed] Server cancelled in-flight speech (${parsed.reason}) in ${parsed.latencyMs}ms`);
     return;
   }
 

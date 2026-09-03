@@ -72,9 +72,10 @@ export class ElevenLabsTTS {
    * @param {Function} [options.onError]
    */
   async streamSpeech(text, options = {}) {
-    const { onAudioChunk = () => {}, onError = () => {} } = options;
+    const { onAudioChunk = () => {}, onError = () => {}, signal } = options;
 
     if (!text || !text.trim()) return;
+    if (signal && signal.aborted) return;
 
     if (!this.apiKey) {
       onError(new Error('ELEVENLABS_API_KEY is not configured.'));
@@ -87,6 +88,7 @@ export class ElevenLabsTTS {
     try {
       const response = await fetch(url, {
         method: 'POST',
+        signal,
         headers: {
           'xi-api-key': this.apiKey,
           'Content-Type': 'application/json'
@@ -108,14 +110,23 @@ export class ElevenLabsTTS {
 
       const reader = response.body.getReader();
       while (true) {
+        if (signal && signal.aborted) {
+          reader.cancel().catch(() => {});
+          break;
+        }
         const { done, value } = await reader.read();
         if (done) break;
+        if (signal && signal.aborted) break;
         if (value && value.length > 0) {
           const buffer = Buffer.from(value);
           onAudioChunk(buffer);
         }
       }
     } catch (err) {
+      if (err.name === 'AbortError' || signal?.aborted) {
+        console.log('[TTS Stream] Cancelled by user barge-in.');
+        return;
+      }
       console.error(`[ElevenLabs TTS Error]`, err.message);
       onError(err);
     }

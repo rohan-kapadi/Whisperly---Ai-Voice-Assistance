@@ -45,7 +45,8 @@ export class LLMService {
       onComplete = () => {},
       onError = () => {},
       onToolCall = () => {},
-      onToolResult = () => {}
+      onToolResult = () => {},
+      signal = null
     } = options;
 
     const startTime = Date.now();
@@ -122,6 +123,10 @@ export class LLMService {
           });
 
           for await (const chunk of responseStream) {
+            if (signal && signal.aborted) {
+              console.log('[LLM Stream] Generation aborted by user barge-in.');
+              break;
+            }
             const delta = chunk.text || '';
             if (delta) {
               if (ttftMs === null) {
@@ -151,6 +156,10 @@ export class LLMService {
             });
 
             for await (const chunk of responseStream) {
+              if (signal && signal.aborted) {
+                console.log('[LLM Stream] Generation aborted by user barge-in.');
+                break;
+              }
               const delta = chunk.text || '';
               if (delta) {
                 if (ttftMs === null) {
@@ -170,10 +179,15 @@ export class LLMService {
           totalMs,
           provider: 'gemini',
           model: 'gemini-2.5-flash',
-          toolsUsed: executedTools
+          toolsUsed: executedTools,
+          interrupted: Boolean(signal?.aborted)
         });
         return;
       } catch (geminiErr) {
+        if (signal?.aborted) {
+          console.log('[LLM Service] Stream aborted cleanly on barge-in.');
+          return;
+        }
         console.error('[LLM Service] Gemini error, checking fallback:', geminiErr.message);
         if (!this.anthropicClient) {
           onError(geminiErr);

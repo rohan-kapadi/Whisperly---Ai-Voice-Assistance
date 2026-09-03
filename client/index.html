@@ -27,7 +27,7 @@
           </svg>
         </div>
         <div>
-          <h1>Voice Assistant <span class="badge-phase">Phase 5</span></h1>
+          <h1>Voice Assistant <span class="badge-phase">Phase 6</span></h1>
           <p class="subtitle">Real-Time Streaming Voice Intelligence</p>
         </div>
       </div>
@@ -127,11 +127,12 @@
             <span id="stt-latency-badge" class="card-tag tag-latency">STT: -- ms</span>
             <span id="llm-ttft-badge" class="card-tag tag-ttft">TTFT: -- ms</span>
             <span id="tts-ttfa-badge" class="card-tag tag-ttfa">TTFA: -- ms</span>
+            <span id="bargein-badge" class="card-tag tag-bargein">Barge-in: Ready</span>
           </div>
         </div>
 
         <p class="section-desc">
-          Full voice conversation loop. Spoken queries transcribe in real-time, execute tools when needed, stream LLM text, and synthesize streaming voice via ElevenLabs.
+          Full voice conversation loop with barge-in interruption. Speak at any time to instantly cut off the assistant (&lt; 200ms) and redirect the turn.
         </p>
 
         <!-- Live Voice Playback Banner (Active Assistant Speech) -->
@@ -140,13 +141,27 @@
             <span class="pulse-speaker-dot"></span>
             <span class="playback-title">Assistant Speaking (Streaming Audio)...</span>
           </div>
-          <div class="speaker-wave-bars">
-            <span class="bar bar-1"></span>
-            <span class="bar bar-2"></span>
-            <span class="bar bar-3"></span>
-            <span class="bar bar-4"></span>
-            <span class="bar bar-5"></span>
+          <div class="playback-controls">
+            <div class="speaker-wave-bars">
+              <span class="bar bar-1"></span>
+              <span class="bar bar-2"></span>
+              <span class="bar bar-3"></span>
+              <span class="bar bar-4"></span>
+              <span class="bar bar-5"></span>
+            </div>
+            <button id="btn-manual-interrupt" class="btn-interrupt" title="Interrupt speech instantly">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="4" y="4" width="16" height="16" rx="2"></rect>
+              </svg>
+              <span>Interrupt</span>
+            </button>
           </div>
+        </div>
+
+        <!-- Barge-In Alert Banner -->
+        <div id="barge-in-alert" class="barge-in-alert hidden">
+          <span class="alert-bolt">⚡</span>
+          <span id="barge-in-text">Barge-in detected! Local speech playback halted in &lt; 50ms.</span>
         </div>
 
         <!-- Live Interim Box (Active Speech Indicator) -->
@@ -315,9 +330,9 @@
         <span class="step-divider">→</span>
         <span class="step done">4: Tools ✓</span>
         <span class="step-divider">→</span>
-        <span class="step active">5: TTS Voice (Active)</span>
+        <span class="step done">5: TTS Voice ✓</span>
         <span class="step-divider">→</span>
-        <span class="step">6: Barge-in</span>
+        <span class="step active">6: Barge-In (Active)</span>
       </div>
     </footer>
   </div>
