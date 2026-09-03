@@ -13,8 +13,10 @@ import fs from 'node:fs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Path to built frontend assets
-const CLIENT_DIST = path.resolve(__dirname, '../client/dist');
+// Path to built frontend assets (check local server/public first, then ../client/dist)
+const CLIENT_DIST = fs.existsSync(path.resolve(__dirname, 'public'))
+  ? path.resolve(__dirname, 'public')
+  : path.resolve(__dirname, '../client/dist');
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
