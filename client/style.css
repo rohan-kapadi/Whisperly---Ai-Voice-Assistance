@@ -1233,6 +1233,121 @@ body {
   100% { opacity: 1; transform: translateY(0); }
 }
 
+/* ==========================================================================
+   Telemetry Waterfall Dashboard (Phase 7)
+   ========================================================================== */
+
+.telemetry-card {
+  grid-column: 1 / -1;
+  background: linear-gradient(135deg, rgba(17, 24, 39, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%);
+  border: 1px solid rgba(6, 182, 212, 0.25);
+  box-shadow: 0 12px 35px -10px rgba(0, 0, 0, 0.6), 0 0 25px rgba(6, 182, 212, 0.08);
+}
+
+.telemetry-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 1.25rem;
+}
+
+.telemetry-kpi-card {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  transition: transform var(--transition-fast);
+}
+
+.telemetry-kpi-card:hover {
+  transform: translateY(-2px);
+}
+
+.kpi-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+}
+
+.kpi-value {
+  font-size: 1.35rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: #fff;
+}
+
+.kpi-sub {
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+}
+
+.kpi-stt { border-left: 3px solid #06b6d4; }
+.kpi-stt .kpi-value { color: #22d3ee; }
+
+.kpi-llm { border-left: 3px solid #6366f1; }
+.kpi-llm .kpi-value { color: #a5b4fc; }
+
+.kpi-tts { border-left: 3px solid #10b981; }
+.kpi-tts .kpi-value { color: #34d399; }
+
+.kpi-total { border-left: 3px solid #38bdf8; background: rgba(6, 182, 212, 0.08); }
+.highlight-green { color: #38bdf8 !important; text-shadow: 0 0 12px rgba(56, 189, 248, 0.4); }
+
+.waterfall-container {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 1rem;
+}
+
+.waterfall-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.waterfall-bar {
+  display: flex;
+  height: 28px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.bar-seg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: #fff;
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.seg-stt {
+  background: linear-gradient(90deg, #0891b2, #06b6d4);
+}
+
+.seg-llm {
+  background: linear-gradient(90deg, #4f46e5, #6366f1);
+}
+
+.seg-tts {
+  background: linear-gradient(90deg, #059669, #10b981);
+}
+
+
 
 
 

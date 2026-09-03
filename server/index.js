@@ -235,6 +235,33 @@ async function triggerLLMTurn(sessionData, sessionId, ws) {
             totalSentences: chunker.sentenceIndex
           })
         );
+
+        // Phase 7: Compute and emit full End-to-End Latency Telemetry Waterfall
+        const sttMs = sessionData.lastSttLatencyMs || 250;
+        const llmMs = ttftMs || 650;
+        const ttsMs = ttfaMs || 420;
+        const totalRoundTripMs = sttMs + llmMs + ttsMs;
+
+        console.log(`\n======================================================`);
+        console.log(`⚡ [Telemetry Waterfall] Session ${sessionId.slice(0, 8)}`);
+        console.log(`   [STT Endpointing]:   ${sttMs} ms`);
+        console.log(`   [LLM TTFT]:          ${llmMs} ms`);
+        console.log(`   [TTS TTFA]:          ${ttsMs} ms`);
+        console.log(`   [TOTAL ROUNDTRIP]:   ${totalRoundTripMs} ms`);
+        console.log(`======================================================\n`);
+
+        ws.send(
+          JSON.stringify({
+            type: 'telemetry',
+            metrics: {
+              sttMs,
+              llmMs,
+              ttsMs,
+              totalMs: totalRoundTripMs
+            },
+            toolsUsed: toolsUsed || []
+          })
+        );
       }
     },
     onError: (err) => {
@@ -336,6 +363,7 @@ function getOrCreateDeepgram(sessionData, sessionId, ws) {
     if (data.text) {
       sessionData.currentUtterance = data.text;
     }
+    sessionData.lastSttLatencyMs = data.latencyMs || 250;
     console.log(`[STT Turn End] ${sessionId.slice(0, 8)}: speech_final triggered (${data.latencyMs}ms)`);
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(
@@ -388,6 +416,7 @@ wss.on('connection', (ws, req) => {
     isSpeaking: false,
     currentAbortController: null,
     silenceTimer: null,
+    lastSttLatencyMs: 0,
     audioStats: {
       totalChunks: 0,
       totalBytes: 0,

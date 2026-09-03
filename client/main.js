@@ -55,6 +55,17 @@ const btnManualInterrupt = document.getElementById('btn-manual-interrupt');
 const bargeInAlert = document.getElementById('barge-in-alert');
 const bargeInText = document.getElementById('barge-in-text');
 
+// DOM Elements: Telemetry Waterfall (Phase 7)
+const e2eStatusBadge = document.getElementById('e2e-status-badge');
+const avgLatencyBadge = document.getElementById('avg-latency-badge');
+const kpiSttVal = document.getElementById('kpi-stt-val');
+const kpiLlmVal = document.getElementById('kpi-llm-val');
+const kpiTtsVal = document.getElementById('kpi-tts-val');
+const kpiTotalVal = document.getElementById('kpi-total-val');
+const barSegStt = document.getElementById('bar-seg-stt');
+const barSegLlm = document.getElementById('bar-seg-llm');
+const barSegTts = document.getElementById('bar-seg-tts');
+
 // DOM Elements: Echo & Test Console
 const echoForm = document.getElementById('echo-form');
 const messageInput = document.getElementById('message-input');
@@ -859,13 +870,25 @@ async function handleTtsAudio(payload) {
 function scheduleAudioBuffer(ctx, audioBuffer, isLast) {
   const source = ctx.createBufferSource();
   source.buffer = audioBuffer;
-  source.connect(ctx.destination);
-  activeAudioSources.push(source);
+
+  // Phase 7: Anti-Click Micro-Fade GainNode (eliminates pops between audio chunks)
+  const gainNode = ctx.createGain();
+  source.connect(gainNode);
+  gainNode.connect(ctx.destination);
 
   const now = ctx.currentTime;
   const startTime = Math.max(now, nextAudioStartTime);
+  const duration = audioBuffer.duration;
+  const fade = 0.005; // 5ms micro-ramp
+
+  gainNode.gain.setValueAtTime(0.001, startTime);
+  gainNode.gain.exponentialRampToValueAtTime(1.0, startTime + Math.min(fade, duration / 2));
+  gainNode.gain.setValueAtTime(1.0, startTime + Math.max(0, duration - fade));
+  gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+
   source.start(startTime);
-  nextAudioStartTime = startTime + audioBuffer.duration;
+  nextAudioStartTime = startTime + duration;
+  activeAudioSources.push(source);
 
   isTtsPlaying = true;
   if (voicePlaybackHud) voicePlaybackHud.classList.remove('hidden');
@@ -890,6 +913,55 @@ function handleTtsEnd(payload) {
     ttsTtfaBadge.textContent = `TTFA: ${payload.ttfaMs} ms`;
   }
   addLog('sys', `Assistant TTS stream complete (${payload.totalSentences || 1} sentences synthesized).`);
+}
+
+// ============================================================================
+// Phase 7: Latency Waterfall Telemetry Handler
+// ============================================================================
+
+let turnLatencies = [];
+
+function handleTelemetry(payload) {
+  const { metrics } = payload;
+  if (!metrics) return;
+
+  if (kpiSttVal) kpiSttVal.textContent = `${metrics.sttMs} ms`;
+  if (kpiLlmVal) kpiLlmVal.textContent = `${metrics.llmMs} ms`;
+  if (kpiTtsVal) kpiTtsVal.textContent = `${metrics.ttsMs} ms`;
+  if (kpiTotalVal) kpiTotalVal.textContent = `${metrics.totalMs} ms`;
+
+  // Update visual waterfall percentage segments
+  const total = Math.max(1, metrics.totalMs);
+  const sttPct = Math.max(12, Math.round((metrics.sttMs / total) * 100));
+  const llmPct = Math.max(20, Math.round((metrics.llmMs / total) * 100));
+  const ttsPct = Math.max(15, 100 - sttPct - llmPct);
+
+  if (barSegStt) {
+    barSegStt.style.width = `${sttPct}%`;
+    barSegStt.textContent = `STT ${metrics.sttMs}ms`;
+  }
+  if (barSegLlm) {
+    barSegLlm.style.width = `${llmPct}%`;
+    barSegLlm.textContent = `LLM ${metrics.llmMs}ms`;
+  }
+  if (barSegTts) {
+    barSegTts.style.width = `${ttsPct}%`;
+    barSegTts.textContent = `TTS ${metrics.ttsMs}ms`;
+  }
+
+  // Update rolling average
+  turnLatencies.push(metrics.totalMs);
+  const avg = Math.round(turnLatencies.reduce((a, b) => a + b, 0) / turnLatencies.length);
+  if (avgLatencyBadge) avgLatencyBadge.textContent = `Avg E2E: ${avg} ms`;
+  if (e2eStatusBadge) {
+    e2eStatusBadge.textContent = avg < 1500 ? 'SUB-1.5s EXCELLENT' : 'TELEMETRY READY';
+    e2eStatusBadge.className = avg < 1500 ? 'badge-live badge-active' : 'badge-live badge-inactive';
+  }
+
+  addLog(
+    'in',
+    `[Telemetry] E2E: ${metrics.totalMs}ms (STT: ${metrics.sttMs}ms | LLM: ${metrics.llmMs}ms | TTS: ${metrics.ttsMs}ms)`
+  );
 }
 
 // ============================================================================
@@ -1168,6 +1240,12 @@ function handleIncomingMessage(raw) {
   if (parsed.type === 'interrupted') {
     stopTtsPlayback(parsed.reason || 'server_confirmed');
     addLog('in', `[Barge-In Confirmed] Server cancelled in-flight speech (${parsed.reason}) in ${parsed.latencyMs}ms`);
+    return;
+  }
+
+  // Phase 7: Latency Waterfall Telemetry
+  if (parsed.type === 'telemetry') {
+    handleTelemetry(parsed);
     return;
   }
 

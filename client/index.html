@@ -27,7 +27,7 @@
           </svg>
         </div>
         <div>
-          <h1>Voice Assistant <span class="badge-phase">Phase 6</span></h1>
+          <h1>Voice Assistant <span class="badge-phase">Phase 7 (Production)</span></h1>
           <p class="subtitle">Real-Time Streaming Voice Intelligence</p>
         </div>
       </div>
@@ -301,6 +301,62 @@
         </div>
       </section>
 
+      <!-- Latency Telemetry & Waterfall Dashboard (Phase 7 Focus) -->
+      <section class="card glass-card telemetry-card">
+        <div class="card-header">
+          <div class="header-with-badge">
+            <h2>End-to-End Latency Waterfall</h2>
+            <span id="e2e-status-badge" class="badge-live badge-inactive">SUB-1.5s TARGET</span>
+          </div>
+          <div class="stt-meta-tags">
+            <span class="card-tag">Real-Time Telemetry</span>
+            <span id="avg-latency-badge" class="card-tag tag-latency">Avg E2E: -- ms</span>
+          </div>
+        </div>
+
+        <p class="section-desc">
+          Live stage-by-stage latency waterfall measuring turn-end to audible speech: Speech-to-Text endpointing + LLM Time-to-First-Token + TTS Time-to-First-Audio.
+        </p>
+
+        <!-- KPI Metrics Row -->
+        <div class="telemetry-grid">
+          <div class="telemetry-kpi-card kpi-stt">
+            <span class="kpi-label">🎙️ STT Finalize</span>
+            <span id="kpi-stt-val" class="kpi-value">-- ms</span>
+            <span class="kpi-sub">Deepgram Nova-2</span>
+          </div>
+          <div class="telemetry-kpi-card kpi-llm">
+            <span class="kpi-label">🧠 LLM TTFT</span>
+            <span id="kpi-llm-val" class="kpi-value">-- ms</span>
+            <span class="kpi-sub">Gemini 2.5 Flash</span>
+          </div>
+          <div class="telemetry-kpi-card kpi-tts">
+            <span class="kpi-label">🔊 TTS TTFA</span>
+            <span id="kpi-tts-val" class="kpi-value">-- ms</span>
+            <span class="kpi-sub">ElevenLabs Turbo</span>
+          </div>
+          <div class="telemetry-kpi-card kpi-total">
+            <span class="kpi-label">⚡ Total Roundtrip</span>
+            <span id="kpi-total-val" class="kpi-value highlight-green">-- ms</span>
+            <span class="kpi-sub">Turn-End to Speech</span>
+          </div>
+        </div>
+
+        <!-- Visual Multi-segment Waterfall Bar -->
+        <div class="waterfall-container">
+          <div class="waterfall-labels">
+            <span>0 ms</span>
+            <span id="waterfall-total-label">E2E Latency Breakdown</span>
+            <span>Target: &lt; 1500 ms</span>
+          </div>
+          <div class="waterfall-bar">
+            <div id="bar-seg-stt" class="bar-seg seg-stt" style="width: 25%" title="STT">STT</div>
+            <div id="bar-seg-llm" class="bar-seg seg-llm" style="width: 45%" title="LLM">LLM</div>
+            <div id="bar-seg-tts" class="bar-seg seg-tts" style="width: 30%" title="TTS">TTS</div>
+          </div>
+        </div>
+      </section>
+
       <!-- Activity & Log Stream -->
       <section class="card glass-card logs-card">
         <div class="card-header">
@@ -332,7 +388,9 @@
         <span class="step-divider">→</span>
         <span class="step done">5: TTS Voice ✓</span>
         <span class="step-divider">→</span>
-        <span class="step active">6: Barge-In (Active)</span>
+        <span class="step done">6: Barge-In ✓</span>
+        <span class="step-divider">→</span>
+        <span class="step active">7: Telemetry & Polish (Active)</span>
       </div>
     </footer>
   </div>
